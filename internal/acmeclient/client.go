@@ -294,8 +294,28 @@ func (c *acmeClient) runPromptWindow(ctx context.Context, conn *acp.ClientSideCo
 			if text == "" {
 				continue
 			}
+			lines := strings.Lines(text)
+			largestLineLength := 0
+			for line := range lines {
+				l := len(line)
+				if l > largestLineLength {
+					largestLineLength = l
+				}
+			}
+			inputBlock := ""
+			for range largestLineLength {
+				inputBlock += "="
+			}
+			inputBlock += "\n" + text + "\n"
+
+			for range largestLineLength {
+				inputBlock += "="
+			}
+			inputBlock +="\n"
+
+			c.appendLine(inputBlock)
 			// Copy prompt to main window.
-			c.appendLine("> " + strings.ReplaceAll(text, "\n", "\n> ") + "\n")
+			//c.appendLine("> " + strings.ReplaceAll(prompt, "\n", "\n> ") + "\n")
 			// Clear the prompt window body.
 			pw.Addr(",")
 			pw.Write("data", []byte(""))
