@@ -294,32 +294,29 @@ func (c *acmeClient) runPromptWindow(ctx context.Context, conn *acp.ClientSideCo
 			if text == "" {
 				continue
 			}
-			lines := strings.Lines(text)
-			largestLineLength := 0
-			for line := range lines {
-				l := len(line)
-				if l > largestLineLength {
-					largestLineLength = l
+			// Calculate border width matching acme window width.
+			cols := 72 // fallback default width
+			tabStop := 4
+			if s := os.Getenv("tabstop"); s != "" {
+				if n, err := strconv.Atoi(s); err == nil && n > 0 {
+					tabStop = n
 				}
 			}
 
-			//input block beautify
-			inputBlock := ""
-			winInfo, err := c.win.Info()
-			if err != nil {
-				c.appendLine("[error: reading window info: " + err.Error() + "]\n")
-				continue
+			if winInfo, err := c.win.Info(); err == nil && winInfo.Size != nil {
+				if winInfo.Size.TabWidth > 0 && winInfo.Size.Width > 0 {
+					charWidth := winInfo.Size.TabWidth / tabStop
+					if charWidth > 0 {
+						// Subtract 1 character margin to prevent line-wrapping at window boundary.
+						if c := (winInfo.Size.Width / charWidth) - 1; c > 0 {
+							cols = c
+						}
+					}
+				}
 			}
-			charsPerTab := 8
-			charWidthPixels := winInfo.Size.TabWidth / charsPerTab
-			if charWidthPixels <= 0 {
-				charWidthPixels = 4 // fallback safety
-			}
-			cols := winInfo.Size.Width / charWidthPixels
-			inputBlock += strings.Repeat("=", cols)
-			inputBlock += "\n" + text + "\n"
-			inputBlock += strings.Repeat("=", cols)
-			inputBlock += "\n"
+
+			border := strings.Repeat("=", cols)
+			inputBlock := border + "\n" + text + "\n" + border + "\n"
 
 			// Copy prompt to main window.
 			c.appendLine(inputBlock)
