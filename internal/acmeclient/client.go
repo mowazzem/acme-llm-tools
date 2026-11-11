@@ -302,20 +302,28 @@ func (c *acmeClient) runPromptWindow(ctx context.Context, conn *acp.ClientSideCo
 					largestLineLength = l
 				}
 			}
+
+			//input block beautify
 			inputBlock := ""
-			for range largestLineLength {
-				inputBlock += "="
+			winInfo, err := c.win.Info()
+			if err != nil {
+				c.appendLine("[error: reading window info: " + err.Error() + "]\n")
+				continue
 			}
+			charsPerTab := 8
+			charWidthPixels := winInfo.Size.TabWidth / charsPerTab
+			if charWidthPixels <= 0 {
+				charWidthPixels = 4 // fallback safety
+			}
+			cols := winInfo.Size.Width / charWidthPixels
+			inputBlock += strings.Repeat("=", cols)
 			inputBlock += "\n" + text + "\n"
+			inputBlock += strings.Repeat("=", cols)
+			inputBlock += "\n"
 
-			for range largestLineLength {
-				inputBlock += "="
-			}
-			inputBlock +="\n"
-
-			c.appendLine(inputBlock)
 			// Copy prompt to main window.
-			//c.appendLine("> " + strings.ReplaceAll(prompt, "\n", "\n> ") + "\n")
+			c.appendLine(inputBlock)
+
 			// Clear the prompt window body.
 			pw.Addr(",")
 			pw.Write("data", []byte(""))
