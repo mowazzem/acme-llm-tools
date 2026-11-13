@@ -15,28 +15,30 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"9fans.net/go/acme"
 	acp "github.com/coder/acp-go-sdk"
 )
 
 type acmeClient struct {
-	win           *acme.Win
-	agentName     string
-	sessionID     acp.SessionId
-	noFS          bool
-	writeMu       sync.Mutex
-	promptMu      sync.Mutex
-	promptWin     *acme.Win
-	promptWinMu   sync.Mutex // guards promptWin
-	terminals     terminalMap
-	permMu        sync.Mutex             // guards permCh
-	permCh        chan int               // non-nil while RequestPermission is waiting
-	inThought     bool                   // true while streaming a thought block
-	commandsMu    sync.Mutex             // guards commands
-	commands      []acp.AvailableCommand // populated on AvailableCommandsUpdate
-	configsMu     sync.Mutex             // guards configOptions
-	configOptions []acp.SessionConfigOption
+	win            *acme.Win
+	agentName      string
+	sessionID      acp.SessionId
+	noFS           bool
+	writeMu        sync.Mutex
+	promptMu       sync.Mutex
+	promptWin      *acme.Win
+	promptWinMu    sync.Mutex // guards promptWin
+	terminals      terminalMap
+	permMu         sync.Mutex             // guards permCh
+	permCh         chan int               // non-nil while RequestPermission is waiting
+	inThought      bool                   // true while streaming a thought block
+	commandsMu     sync.Mutex             // guards commands
+	commands       []acp.AvailableCommand // populated on AvailableCommandsUpdate
+	configsMu      sync.Mutex             // guards configOptions
+	configOptions  []acp.SessionConfigOption
+	loadingHistory atomic.Bool // true while LoadSession replays history
 }
 
 // traceWriter wraps an io.WriteCloser and logs each write to stderr.
@@ -135,11 +137,13 @@ func Run(ctx context.Context, agentArgs []string, trace bool, resume string, noF
 			return fmt.Errorf("agent does not support session resume")
 		}
 		sessID = acp.SessionId(resume)
+		c.loadingHistory.Store(true)
 		loadResp, loadErr := conn.LoadSession(ctx, acp.LoadSessionRequest{
 			SessionId:  sessID,
 			Cwd:        cwd,
 			McpServers: []acp.McpServer{},
 		})
+		c.loadingHistory.Store(false)
 		if loadErr != nil {
 			return fmt.Errorf("ACP load session: %w", loadErr)
 		}
@@ -388,6 +392,9 @@ func (c *acmeClient) SessionUpdate(ctx context.Context, n acp.SessionNotificatio
 	u := n.Update
 	switch {
 	case u.UserMessageChunk != nil:
+		if !c.loadingHistory.Load() {
+			break
+		}
 		content := u.UserMessageChunk.Content
 		if content.Text != nil {
 			c.writeMu.Lock()
